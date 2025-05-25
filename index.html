@@ -1,33 +1,296 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
-  <title>Desativar Chamado</title>
-  <script>
-    window.onload = function() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const ticket = urlParams.get('ticket');
-      if (ticket) {
-        alert(ticket);
-        // Enviar mensagem para o content script da extensão
-        window.postMessage({ action: 'desativar', ticket: ticket }, '*');
-
-        // Escutar resposta do content script
-        window.addEventListener('message', (event) => {
-          if (event.data.action === 'desativarResponse') {
-            if (event.data.status === 'success') {
-              document.body.innerHTML = '<p>Chamado ' + event.data.ticket + ' enviado para desativação. A extensão processará automaticamente.</p>';
-            } else {
-              document.body.innerHTML = '<p>Erro ao enviar o chamado ' + event.data.ticket + '. Certifique-se de que a extensão está instalada e ativa.</p>';
-            }
-          }
-        });
-      } else {
-        document.body.innerHTML = '<p>Nenhum ticket encontrado na URL.</p>';
-      }
-    };
-  </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Desativar Chamado - TJSC</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+      color: #333;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .ticket-info {
+      background: #e3f2fd;
+      padding: 15px;
+      border-radius: 5px;
+      margin: 20px 0;
+      border-left: 4px solid #2196f3;
+    }
+    .status {
+      padding: 15px;
+      border-radius: 5px;
+      margin: 20px 0;
+      font-weight: bold;
+    }
+    .status.processing {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      color: #856404;
+    }
+    .status.success {
+      background: #d4edda;
+      border-left: 4px solid #28a745;
+      color: #155724;
+    }
+    .status.error {
+      background: #f8d7da;
+      border-left: 4px solid #dc3545;
+      color: #721c24;
+    }
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #2196f3;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 10px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .retry-btn {
+      background: #2196f3;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-top: 15px;
+    }
+    .retry-btn:hover {
+      background: #1976d2;
+    }
+  </style>
 </head>
 <body>
-  <p>Processando...</p>
+  <div class="container">
+    <div class="header">
+      <h1>🎫 Desativação de Chamado</h1>
+      <p>Sistema de Comunicação com Extensão TJSC</p>
+    </div>
+    
+    <div id="content">
+      <div class="status processing">
+        <div class="loading"></div>
+        Processando solicitação...
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Configurações
+    const TIMEOUT_EXTENSION = 10000; // 10 segundos timeout para resposta da extensão
+    const MAX_RETRY_ATTEMPTS = 3;
+    let retryCount = 0;
+    let currentTicket = null;
+    
+    // Elementos DOM
+    const contentDiv = document.getElementById('content');
+    
+    // Função para atualizar o conteúdo da página
+    function updateContent(html) {
+      contentDiv.innerHTML = html;
+    }
+    
+    // Função para mostrar informações do ticket
+    function showTicketInfo(ticket) {
+      return `
+        <div class="ticket-info">
+          <h3>📋 Informações do Chamado</h3>
+          <p><strong>Número:</strong> ${ticket}</p>
+          <p><strong>Ação:</strong> Solicitação de desativação</p>
+          <p><strong>Sistema:</strong> IBM Maximo TJSC</p>
+        </div>
+      `;
+    }
+    
+    // Função para tentar comunicação com a extensão
+    function attemptExtensionCommunication(ticket) {
+      return new Promise((resolve, reject) => {
+        let responseReceived = false;
+        
+        // Listener para resposta da extensão
+        const messageListener = (event) => {
+          if (event.data && event.data.action === 'desativarResponse') {
+            responseReceived = true;
+            window.removeEventListener('message', messageListener);
+            
+            if (event.data.status === 'success') {
+              resolve(event.data);
+            } else {
+              reject(new Error(event.data.error || 'Erro desconhecido na extensão'));
+            }
+          }
+        };
+        
+        window.addEventListener('message', messageListener);
+        
+        // Timeout para a resposta
+        setTimeout(() => {
+          if (!responseReceived) {
+            window.removeEventListener('message', messageListener);
+            reject(new Error('Timeout: Extensão não respondeu dentro do tempo esperado'));
+          }
+        }, TIMEOUT_EXTENSION);
+        
+        // Enviar mensagem para a extensão
+        console.log('Enviando mensagem para extensão:', { action: 'desativar', ticket: ticket });
+        window.postMessage({ action: 'desativar', ticket: ticket }, '*');
+      });
+    }
+    
+    // Função para tentar novamente
+    function retryConnection(ticket) {
+      if (retryCount < MAX_RETRY_ATTEMPTS) {
+        retryCount++;
+        updateContent(`
+          ${showTicketInfo(ticket)}
+          <div class="status processing">
+            <div class="loading"></div>
+            Tentativa ${retryCount} de ${MAX_RETRY_ATTEMPTS} - Comunicando com a extensão...
+          </div>
+        `);
+        
+        attemptExtensionCommunication(ticket)
+          .then(handleSuccess)
+          .catch(handleError);
+      } else {
+        updateContent(`
+          ${showTicketInfo(ticket)}
+          <div class="status error">
+            ❌ <strong>Falha na Comunicação</strong><br>
+            Não foi possível estabelecer comunicação com a extensão após ${MAX_RETRY_ATTEMPTS} tentativas.
+            <br><br>
+            <strong>Possíveis causas:</strong>
+            <ul>
+              <li>Extensão não está instalada</li>
+              <li>Extensão está desabilitada</li>
+              <li>Página não está na lista de sites permitidos</li>
+              <li>Erro interno da extensão</li>
+            </ul>
+            <br>
+            <strong>Soluções:</strong>
+            <ul>
+              <li>Verifique se a extensão está instalada e ativa</li>
+              <li>Recarregue a página e tente novamente</li>
+              <li>Contate o suporte técnico se o problema persistir</li>
+            </ul>
+          </div>
+        `);
+      }
+    }
+    
+    // Handler para sucesso
+    function handleSuccess(response) {
+      updateContent(`
+        ${showTicketInfo(response.ticket)}
+        <div class="status success">
+          ✅ <strong>Sucesso!</strong><br>
+          Chamado ${response.ticket} foi enviado para desativação.<br>
+          A extensão processará automaticamente a solicitação na próxima atualização.
+          <br><br>
+          <strong>Próximos passos:</strong>
+          <ul>
+            <li>A extensão detectará automaticamente esta solicitação</li>
+            <li>O chamado será desativado na próxima sincronização</li>
+            <li>Você pode fechar esta página</li>
+          </ul>
+        </div>
+      `);
+    }
+    
+    // Handler para erro
+    function handleError(error) {
+      console.error('Erro na comunicação:', error);
+      
+      updateContent(`
+        ${showTicketInfo(currentTicket)}
+        <div class="status error">
+          ❌ <strong>Erro na Comunicação</strong><br>
+          ${error.message}
+          <br><br>
+          <button class="retry-btn" onclick="retryConnection('${currentTicket}')">
+            🔄 Tentar Novamente (${retryCount}/${MAX_RETRY_ATTEMPTS})
+          </button>
+        </div>
+      `);
+    }
+    
+    // Função principal executada quando a página carrega
+    function initializePage() {
+      // Obter ticket da URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const ticket = urlParams.get('ticket');
+      
+      if (!ticket) {
+        updateContent(`
+          <div class="status error">
+            ❌ <strong>Erro: Ticket não encontrado</strong><br>
+            Nenhum número de chamado foi encontrado na URL.<br>
+            Certifique-se de que a URL contém o parâmetro '?ticket=NUMERO'
+            <br><br>
+            <strong>Exemplo correto:</strong><br>
+            <code>https://gmsetta.github.io/chamados-redirect/?ticket=123456</code>
+          </div>
+        `);
+        return;
+      }
+      
+      // Validar formato do ticket (apenas números)
+      if (!/^\d+$/.test(ticket)) {
+        updateContent(`
+          <div class="status error">
+            ❌ <strong>Erro: Formato de ticket inválido</strong><br>
+            O ticket deve conter apenas números.<br>
+            Ticket recebido: <code>${ticket}</code>
+          </div>
+        `);
+        return;
+      }
+      
+      currentTicket = ticket;
+      
+      // Mostrar informações iniciais e tentar comunicação
+      updateContent(`
+        ${showTicketInfo(ticket)}
+        <div class="status processing">
+          <div class="loading"></div>
+          Estabelecendo comunicação com a extensão...
+        </div>
+      `);
+      
+      // Pequeno delay para melhor UX
+      setTimeout(() => {
+        attemptExtensionCommunication(ticket)
+          .then(handleSuccess)
+          .catch(handleError);
+      }, 1000);
+    }
+    
+    // Executar quando a página carregar
+    window.onload = initializePage;
+    
+    // Debug: Log de todas as mensagens recebidas
+    window.addEventListener('message', (event) => {
+      console.log('Mensagem recebida:', event.data);
+    });
+  </script>
 </body>
 </html>

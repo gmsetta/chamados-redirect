@@ -3,22 +3,25 @@
 <head>
   <title>Desativar Chamado</title>
   <script>
-    function tentarAbrirExtensao() {
+    // Tenta abrir diretamente com protocolo personalizado
+    function abrirExtensao() {
       const urlParams = new URLSearchParams(window.location.search);
       const ticket = urlParams.get('ticket');
       if (ticket) {
-        const extensaoUrl = 'chrome-extension://MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC/4LPaKg78wtHlau1aqqbL+/jio9ZbFFT385VYryE/pHGozyz/Q3biFnVHCNypiYQatgh5OVEKNUYJNQ9YChQINgj1JguC5k3HrQRllnnj/emVru5wUZ2Jskv2g9O7tSZANmJC3Dz+w/zehshXSn/3hLdIw6uAH+fvl58NliwTSVk3U8yWZwe3cCkFQ0zgltMA5NBFEystM3PfKxOloA+4mzoEZgLRpMd2zxA0dij9QNqduNTbAePZE6JijGnykJgG7CgwG4JrC07LPM4NdgjoBi4tg5WHaF5X6uLWSJho2HOTLO4vL9QswAIq/xNaBetGd78+zZYIsPV9615DMKNBAgMBAAECggEAAfbsAHzTwHTCL2Yj3fzHTmlbB/8Db9VKdWtyCQFqBrvJSiAs5sQrEG+IbdzCXZ4B00Av4AXdNYyMFgYMDSu1PsxG1TO5hHKVM0krNVsQDmyIGrc6y72aLlG8A18gKNjW9mtYIDUfDsC08xZQMMybeM5MDhuqwtoQxtw3ja0O8HeYPYVPx95nd6GioyGqTY5XMrgwd15OsitY2tX1gTPAOn6fhqiUswm4ncgti6KkJmv/wS7MPq0G/uJmUYG1jeLrcPZgO3XNeid3VKRrcWHFDZFx8moYzgrDFrjQQgiZjNrgpqeRGf8gJCM7m087NDrat238ZV+RD0NBrVFa0GNFAQKBgQDqpc2JQeVODPWAMuH8Bxjxa/VymP+gCk4JZ3aCzxatWYemk0V3ux2t7wTIts0DRyEquiCWC969fTgU2UW9UZXxAd/p9nShX/U21n75ICDLDcOyWJxDCadryyEE8v5cx4R7ytXtxwP0Rnhp0kRG3+FXTYiiGEXR8upd567hQLaK8QKBgQDRVo9N8Z9bCQ6WN14ZEC9hv+Yjd+T5NrgBetQaH7Dl5vRIjnahXJEmsRKkpyzahyPRAwzTzYHkY7f+gH2XCVW18aj5O4vQp4f7rqMXxM+LLBizllFNGNDr4SRLcUUM6UWomtsZwPqbICDHERDTjNCp/gHf+GFy4um3CK4hiwd9UQKBgQDpfb9++8Fv31lUDk3teiqJ4cHGHRURbe+lT/0PwX5xVQu06AtSTzIDaDq8d5qdzmPknn3akUk+CaKKrIHHF646uoDT0VjRVCkwPlTvFddL9xBrId2sn6injOP4hswyCp98h6RFDaqToqQjuQYT+KfFNfPmSH0Bo9UvSGIu5zQ+IQKBgFWOfBlOFGQfin+od2Pk8oiP5p4+ZS3ZyFCKg999bk44G0UAPMnsTEK1AjqbPMC/lMra5UY3aswOWWfB2hJ9tTMcZoQeayFHJ1Oc53lSbcSirCHR4L6S0uhk5vGShLcnK9oiGEQpVANMmTji566ekbW4Y8nG+QT8aqrs+EYrTU9RAoGBAKpIrpgLbywb6dT/s4DOlLjaOUdMaf6HdLQleioLAc3gwV5iERDMNs8MCJiDmMp1MyoBmwhZw8dBNfUZoAnZsPCNoOZ1ibpc6cmnVPuIOSomaiknwFfW3BdkBxU5oitya411APa3J1cuO+LRLlBnFVENJpGKNudGmm5xlttPowqV/ack.html?ticket=' + ticket;
-        window.location.href = extensaoUrl;
+        const extensaoUrl = `x-chamados://desativar?ticket=${encodeURIComponent(ticket)}`;
+        window.location.href = extensaoUrl; // Tenta abrir com protocolo
       } else {
-        alert('Nenhum ticket encontrado na URL.');
+        alert('Nenhum ticket encontrado.');
       }
     }
+
+    // Fallback para caso o protocolo falhe
+    window.onload = function() {
+      abrirExtensao();
+    };
   </script>
 </head>
 <body>
-  <h1>Desativar Chamado</h1>
-  <p>Para desativar o chamado, clique no botão abaixo ou abra a extensão Chrome manualmente:</p>
-  <button onclick="tentarAbrirExtensao()">Abrir Extensão</button>
-  <p>Se o botão não funcionar, abra a extensão Chrome e insira o ticket manualmente.</p>
+  <p>Redirecionando para desativar o chamado...</p>
 </body>
 </html>

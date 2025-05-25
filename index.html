@@ -7,24 +7,19 @@
       const urlParams = new URLSearchParams(window.location.search);
       const ticket = urlParams.get('ticket');
       if (ticket) {
-        // Enviar mensagem para a extensão
-        try {
-          chrome.runtime.sendMessage(
-            'MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC/4LPaKg78wtHlau1aqqbL+/jio9ZbFFT385VYryE/pHGozyz/Q3biFnVHCNypiYQatgh5OVEKNUYJNQ9YChQINgj1JguC5k3HrQRllnnj/emVru5wUZ2Jskv2g9O7tSZANmJC3Dz+w/zehshXSn/3hLdIw6uAH+fvl58NliwTSVk3U8yWZwe3cCkFQ0zgltMA5NBFEystM3PfKxOloA+4mzoEZgLRpMd2zxA0dij9QNqduNTbAePZE6JijGnykJgG7CgwG4JrC07LPM4NdgjoBi4tg5WHaF5X6uLWSJho2HOTLO4vL9QswAIq/xNaBetGd78+zZYIsPV9615DMKNBAgMBAAECggEAAfbsAHzTwHTCL2Yj3fzHTmlbB/8Db9VKdWtyCQFqBrvJSiAs5sQrEG+IbdzCXZ4B00Av4AXdNYyMFgYMDSu1PsxG1TO5hHKVM0krNVsQDmyIGrc6y72aLlG8A18gKNjW9mtYIDUfDsC08xZQMMybeM5MDhuqwtoQxtw3ja0O8HeYPYVPx95nd6GioyGqTY5XMrgwd15OsitY2tX1gTPAOn6fhqiUswm4ncgti6KkJmv/wS7MPq0G/uJmUYG1jeLrcPZgO3XNeid3VKRrcWHFDZFx8moYzgrDFrjQQgiZjNrgpqeRGf8gJCM7m087NDrat238ZV+RD0NBrVFa0GNFAQKBgQDqpc2JQeVODPWAMuH8Bxjxa/VymP+gCk4JZ3aCzxatWYemk0V3ux2t7wTIts0DRyEquiCWC969fTgU2UW9UZXxAd/p9nShX/U21n75ICDLDcOyWJxDCadryyEE8v5cx4R7ytXtxwP0Rnhp0kRG3+FXTYiiGEXR8upd567hQLaK8QKBgQDRVo9N8Z9bCQ6WN14ZEC9hv+Yjd+T5NrgBetQaH7Dl5vRIjnahXJEmsRKkpyzahyPRAwzTzYHkY7f+gH2XCVW18aj5O4vQp4f7rqMXxM+LLBizllFNGNDr4SRLcUUM6UWomtsZwPqbICDHERDTjNCp/gHf+GFy4um3CK4hiwd9UQKBgQDpfb9++8Fv31lUDk3teiqJ4cHGHRURbe+lT/0PwX5xVQu06AtSTzIDaDq8d5qdzmPknn3akUk+CaKKrIHHF646uoDT0VjRVCkwPlTvFddL9xBrId2sn6injOP4hswyCp98h6RFDaqToqQjuQYT+KfFNfPmSH0Bo9UvSGIu5zQ+IQKBgFWOfBlOFGQfin+od2Pk8oiP5p4+ZS3ZyFCKg999bk44G0UAPMnsTEK1AjqbPMC/lMra5UY3aswOWWfB2hJ9tTMcZoQeayFHJ1Oc53lSbcSirCHR4L6S0uhk5vGShLcnK9oiGEQpVANMmTji566ekbW4Y8nG+QT8aqrs+EYrTU9RAoGBAKpIrpgLbywb6dT/s4DOlLjaOUdMaf6HdLQleioLAc3gwV5iERDMNs8MCJiDmMp1MyoBmwhZw8dBNfUZoAnZsPCNoOZ1ibpc6cmnVPuIOSomaiknwFfW3BdkBxU5oitya411APa3J1cuO+LRLlBnFVENJpGKNudGmm5xlttPowqV/ack',
-            { action: 'desativar', ticket: ticket },
-            (response) => {
-              if (chrome.runtime.lastError) {
-                document.body.innerHTML = '<p>Erro ao enviar o chamado: ' + chrome.runtime.lastError.message + '. Certifique-se de que a extensão está instalada e ativa.</p>';
-              } else if (response && response.status === 'success') {
-                document.body.innerHTML = '<p>Chamado ' + ticket + ' enviado para desativação. A extensão processará automaticamente.</p>';
-              } else {
-                document.body.innerHTML = '<p>Erro ao enviar o chamado. Certifique-se de que a extensão está aberta e instalada.</p>';
-              }
+        // Enviar mensagem para o content script da extensão
+        window.postMessage({ action: 'desativar', ticket: ticket }, '*');
+
+        // Escutar resposta do content script
+        window.addEventListener('message', (event) => {
+          if (event.data.action === 'desativarResponse') {
+            if (event.data.status === 'success') {
+              document.body.innerHTML = '<p>Chamado ' + event.data.ticket + ' enviado para desativação. A extensão processará automaticamente.</p>';
+            } else {
+              document.body.innerHTML = '<p>Erro ao enviar o chamado ' + event.data.ticket + '. Certifique-se de que a extensão está instalada e ativa.</p>';
             }
-          );
-        } catch (error) {
-          document.body.innerHTML = '<p>Erro ao tentar enviar o chamado: ' + error.message + '. Certifique-se de que a extensão está instalada.</p>';
-        }
+          }
+        });
       } else {
         document.body.innerHTML = '<p>Nenhum ticket encontrado na URL.</p>';
       }

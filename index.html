@@ -202,18 +202,13 @@
       updateContent(`
         ${showTicketInfo(response.ticket)}
         <div class="status success">
-          ✅ <strong>Sucesso!</strong><br>
-          Chamado ${response.ticket} foi enviado para desativação.<br>
-          A extensão processará automaticamente a solicitação na próxima atualização.
-          <br><br>
-          <strong>Próximos passos:</strong>
-          <ul>
-            <li>A extensão detectará automaticamente esta solicitação</li>
-            <li>O chamado será desativado na próxima sincronização</li>
-            <li>Você pode fechar esta página</li>
-          </ul>
+          ✅ Solicitação para desativar chamado #${response.ticket} enviada! Fechando...
         </div>
       `);
+      // Fecha a janela automaticamente após um curto período
+      setTimeout(() => {
+        window.close();
+      }, 1500); // Fecha após 1.5 segundos
     }
     
     // Handler para erro
@@ -276,12 +271,12 @@
         </div>
       `);
       
-      // Pequeno delay para melhor UX
+      // Pequeno delay para melhor UX e para garantir que o DOM foi atualizado
       setTimeout(() => {
         attemptExtensionCommunication(ticket)
           .then(handleSuccess)
           .catch(handleError);
-      }, 1000);
+      }, 100); // Reduzido de 1000ms para 100ms
     }
     
     // Executar quando a página carregar

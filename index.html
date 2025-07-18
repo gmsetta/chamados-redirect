@@ -81,6 +81,13 @@
         // Atualiza status na página
         const showStatus = (message, type = 'loading', showRetry = false) => {
             const container = document.querySelector('.container');
+            
+            // Verifica se o container existe
+            if (!container) {
+                console.error('Container não encontrado!');
+                return;
+            }
+            
             const deviceText = isMobile ? '📱 Dispositivo móvel detectado' : '🖥️ Dispositivo desktop detectado';
             
             const retryButton = showRetry ? `
@@ -103,16 +110,20 @@
                 bgColor = '#fff0f0';
             }
 
-            document.body.style.background = bgColor;
-            container.innerHTML = `
-                <h2>${icon} ${title}</h2>
-                <p class="${type}">${message}</p>
-                <div class="device-info">${deviceText}</div>
-                ${retryButton}
-                <p style="color: #666; font-size: 12px; margin-top: 20px;">
-                    Você pode fechar esta aba.
-                </p>
-            `;
+            try {
+                document.body.style.background = bgColor;
+                container.innerHTML = `
+                    <h2>${icon} ${title}</h2>
+                    <p class="${type}">${message}</p>
+                    <div class="device-info">${deviceText}</div>
+                    ${retryButton}
+                    <p style="color: #666; font-size: 12px; margin-top: 20px;">
+                        Você pode fechar esta aba.
+                    </p>
+                `;
+            } catch (error) {
+                console.error('Erro ao atualizar status:', error);
+            }
         };
 
         // Função principal para desativar chamado
@@ -189,6 +200,9 @@
         // Função principal
         const main = async () => {
             try {
+                // Aguarda um pouco para garantir que o DOM esteja carregado
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
                 // Atualiza info do dispositivo
                 const deviceInfo = document.getElementById('deviceInfo');
                 if (deviceInfo) {

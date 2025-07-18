@@ -156,6 +156,12 @@
                         <small>Tópico usado: ${topico}</small>`, 
                         'success'
                     );
+                    
+                    // Fecha a janela automaticamente após 1.5 segundos
+                    setTimeout(() => {
+                        window.close();
+                    }, 1500);
+                    
                     return true;
 
                 } catch (error) {

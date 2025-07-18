@@ -1,177 +1,217 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Desativar Chamado - TJSC</title>
-  <style>
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      max-width: 600px;
-      margin: 50px auto;
-      padding: 20px;
-      background-color: #f5f5f5;
-      color: #333;
-    }
-    .container {
-      background: white;
-      padding: 30px;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    }
-    .header {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-    .ticket-info {
-      background: #e3f2fd;
-      padding: 15px;
-      border-radius: 5px;
-      margin: 20px 0;
-      border-left: 4px solid #2196f3;
-    }
-    .status {
-      padding: 15px;
-      border-radius: 5px;
-      margin: 20px 0;
-      font-weight: bold;
-    }
-    .status.processing {
-      background: #fff3cd;
-      border-left: 4px solid #ffc107;
-      color: #856404;
-    }
-    .status.success {
-      background: #d4edda;
-      border-left: 4px solid #28a745;
-      color: #155724;
-    }
-    .status.error {
-      background: #f8d7da;
-      border-left: 4px solid #dc3545;
-      color: #721c24;
-    }
-    .loading {
-      display: inline-block;
-      width: 20px;
-      height: 20px;
-      border: 3px solid #f3f3f3;
-      border-top: 3px solid #2196f3;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin-right: 10px;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    .retry-btn {
-      background: #2196f3;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 5px;
-      cursor: pointer;
-      margin-top: 15px;
-    }
-    .retry-btn:hover {
-      background: #1976d2;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Desativação de Chamado</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 50px;
+            background: #f0f0f0;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .loading {
+            color: #007bff;
+        }
+        .success {
+            color: #28a745;
+        }
+        .error {
+            color: #dc3545;
+        }
+        .device-info {
+            color: #666;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        .btn {
+            margin-top: 15px;
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>🎫 Desativação de Chamado</h1>
-      <p>Sistema de Comunicação com Extensão TJSC</p>
+    <div class="container">
+        <h2>🔄 Processando...</h2>
+        <p class="loading">Aguarde, desativando chamado...</p>
+        <div class="device-info" id="deviceInfo"></div>
     </div>
-    
-    <div id="content">
-      <div class="status processing">
-        <div class="loading"></div>
-        Processando solicitação...
-      </div>
-    </div>
-  </div>
 
-  <script>
-  const NTFY_TOPIC = 'atualizador-maximo-gmsetta-tickets-v5';
-  const NTFY_URL   = `https://ntfy.sh/${NTFY_TOPIC}`;
-  const isMobile   = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    <script>
+        // === CONFIGURAÇÃO MÚLTIPLOS TÓPICOS ===
+        const NTFY_TOPICS = [
+            'atualizador-maximo-gmsetta-tickets-v5-01',
+            'atualizador-maximo-gmsetta-tickets-v5-02',
+            'atualizador-maximo-gmsetta-tickets-v5-03'
+        ];
 
-  // atualiza o status na página
-  function updateStatus(type, html, showRetry = false) {
-    const retryBtn = showRetry
-      ? `<button class="retry-btn" onclick="startProcess()">🔄 Tentar Novamente</button>`
-      : '';
-    document.getElementById('content').innerHTML = `
-      <div class="status ${type}">
-        ${html}${retryBtn}
-      </div>`;
-  }
+        // Seleciona tópico baseado no número do ticket
+        const getNtfyTopic = (ticket) => {
+            const ticketNum = parseInt(ticket) || 0;
+            const index = ticketNum % NTFY_TOPICS.length;
+            return NTFY_TOPICS[index];
+        };
 
-  // envia o POST com retry
-  async function sendWithRetry(ticket, attempts = 3) {
-    for (let i = 1; i <= attempts; i++) {
-      try {
-        const timeout = isMobile ? 5000 : 3000;
-        const ctr     = new AbortController();
-        setTimeout(() => ctr.abort(), timeout);
+        const getNtfyUrl = (ticket) => {
+            const topic = getNtfyTopic(ticket);
+            return `https://ntfy.sh/${topic}`;
+        };
 
-        const res = await fetch(NTFY_URL, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'text/plain',
-            'User-Agent': isMobile ? 'Mobile-Webhook' : 'Desktop-Webhook'
-          },
-          body: ticket,
-          signal: ctr.signal
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return;
-      } catch (e) {
-        if (i === attempts) throw e;
-        await new Promise(r => setTimeout(r, isMobile ? 2000 : 1000));
-      }
-    }
-  }
+        // Detecta dispositivo
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-  function showTicketInfo(ticket) {
-    return `
-      <div class="ticket-info">
-        <h3>📋 Chamado #${ticket}</h3>
-        <p>Sistema: Atualizador</p>
-      </div>`;
-  }
+        // Atualiza status na página
+        const showStatus = (message, type = 'loading', showRetry = false) => {
+            const container = document.querySelector('.container');
+            const deviceText = isMobile ? '📱 Dispositivo móvel detectado' : '🖥️ Dispositivo desktop detectado';
+            
+            const retryButton = showRetry ? `
+                <button class="btn" onclick="window.location.reload()">
+                    🔄 Tentar Novamente
+                </button>
+            ` : '';
 
-  async function startProcess() {
-    const ticket = new URLSearchParams(location.search).get('ticket');
-    if (!ticket || !/^\d+$/.test(ticket)) {
-      updateStatus('error', '<strong>Ticket inválido!</strong>');
-      return;
-    }
+            let icon = '🔄';
+            let title = 'Processando...';
+            let bgColor = '#f0f0f0';
 
-    document.getElementById('content').innerHTML = `
-      ${showTicketInfo(ticket)}
-      <div class="status processing">
-        <div class="loading"></div>
-        Processando desativação...
-      </div>`;
+            if (type === 'success') {
+                icon = '✅';
+                title = 'Sucesso!';
+                bgColor = '#f0fff0';
+            } else if (type === 'error') {
+                icon = '❌';
+                title = 'Erro';
+                bgColor = '#fff0f0';
+            }
 
-    try {
-      await sendWithRetry(ticket);
-      updateStatus('success',
-        `✅ Chamado #${ticket} desativado com sucesso!`);
-      setTimeout(() => window.close(), 1500);
-    } catch (err) {
-      const msg = err.name === 'AbortError'
-        ? 'Timeout: servidor não respondeu a tempo.'
-        : 'Erro de rede: não foi possível conectar.';
-      updateStatus('error', msg, true);
-    }
-  }
+            document.body.style.background = bgColor;
+            container.innerHTML = `
+                <h2>${icon} ${title}</h2>
+                <p class="${type}">${message}</p>
+                <div class="device-info">${deviceText}</div>
+                ${retryButton}
+                <p style="color: #666; font-size: 12px; margin-top: 20px;">
+                    Você pode fechar esta aba.
+                </p>
+            `;
+        };
 
-  window.onload = startProcess;
-</script>
+        // Função principal para desativar chamado
+        const desativarChamado = async (ticket) => {
+            const maxTentativas = 3;
+            const timeout = isMobile ? 5000 : 3000;
+
+            for (let tentativa = 1; tentativa <= maxTentativas; tentativa++) {
+                try {
+                    console.log(`Tentativa ${tentativa}/${maxTentativas} - Desativando ticket #${ticket}...`);
+                    
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+                    const topico = getNtfyTopic(ticket);
+                    const url = getNtfyUrl(ticket);
+                    
+                    console.log(`Enviando para tópico: ${topico}`);
+                    console.log(`URL: ${url}`);
+
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        body: ticket,
+                        signal: controller.signal,
+                        headers: {
+                            'Content-Type': 'text/plain',
+                            'User-Agent': isMobile ? 'Mobile-Desativador' : 'Desktop-Desativador'
+                        }
+                    });
+
+                    clearTimeout(timeoutId);
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    // Sucesso!
+                    console.log(`✅ Chamado #${ticket} desativado com sucesso!`);
+                    showStatus(
+                        `Chamado #${ticket} foi desativado com sucesso!<br>
+                        <small>Tópico usado: ${topico}</small>`, 
+                        'success'
+                    );
+                    return true;
+
+                } catch (error) {
+                    console.warn(`⚠️ Tentativa ${tentativa} falhou:`, error.message);
+                    
+                    if (tentativa === maxTentativas) {
+                        // Última tentativa falhou
+                        console.error(`❌ Falha definitiva após ${tentativa} tentativas`);
+                        showStatus(
+                            `Erro ao desativar chamado #${ticket}:<br>
+                            <small>${error.message}</small><br>
+                            <small>Tente novamente ou desative manualmente no PC.</small>`, 
+                            'error', 
+                            true
+                        );
+                        return false;
+                    }
+
+                    // Aguarda antes da próxima tentativa
+                    await new Promise(resolve => setTimeout(resolve, 1000 * tentativa));
+                }
+            }
+        };
+
+        // Função principal
+        const main = async () => {
+            try {
+                // Atualiza info do dispositivo
+                const deviceInfo = document.getElementById('deviceInfo');
+                if (deviceInfo) {
+                    deviceInfo.textContent = isMobile ? '📱 Dispositivo móvel detectado' : '🖥️ Dispositivo desktop detectado';
+                }
+
+                // Extrai ticket da URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const ticket = urlParams.get('ticket');
+
+                if (!ticket) {
+                    showStatus('Número do chamado não encontrado na URL.', 'error', true);
+                    return;
+                }
+
+                console.log(`Iniciando desativação do ticket #${ticket}`);
+                showStatus(`Desativando chamado #${ticket}...`);
+
+                // Executa desativação
+                await desativarChamado(ticket);
+
+            } catch (error) {
+                console.error('Erro geral:', error);
+                showStatus(`Erro inesperado: ${error.message}`, 'error', true);
+            }
+        };
+
+        // Inicia quando a página carrega
+        document.addEventListener('DOMContentLoaded', main);
+    </script>
 </body>
 </html>

@@ -56,8 +56,27 @@
     </div>
 
     <script>
+        // === CONFIGURAÇÃO ===
+        const NTFY_TOPICS = [
+            'atualizador-maximo-gmsetta-tickets-v5-01',
+            'atualizador-maximo-gmsetta-tickets-v5-02',
+            'atualizador-maximo-gmsetta-tickets-v5-03'
+        ];
+
         // Detecta dispositivo
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+        // Seleciona tópico baseado no número do ticket
+        const getNtfyTopic = (ticket) => {
+            const ticketNum = parseInt(ticket) || 0;
+            const index = ticketNum % NTFY_TOPICS.length;
+            return NTFY_TOPICS[index];
+        };
+
+        const getNtfyUrl = (ticket) => {
+            const topic = getNtfyTopic(ticket);
+            return `https://ntfy.sh/${topic}`;
+        };
 
         // Atualiza status na página
         const showStatus = (message, type = 'loading', showRetry = false) => {
@@ -106,44 +125,112 @@
             }
         };
 
-        // Função principal para desativar chamado
-        const desativarChamado = async (ticket) => {
+        // Tenta desativar via extensão (Desktop)
+        const tentarDesativarViaExtensao = (ticket) => {
             return new Promise((resolve, reject) => {
-                console.log(`Enviando comando de desativação para ticket #${ticket}...`);
+                console.log('🖥️ Tentando desativar via extensão...');
                 
-                // Listener para resposta da extensão
+                let responseReceived = false;
+                
                 const responseHandler = (event) => {
                     if (event.data && 
                         event.data.action === 'desativarResponse' && 
                         event.data.ticket === ticket) {
                         
+                        responseReceived = true;
                         window.removeEventListener('message', responseHandler);
                         
                         if (event.data.status === 'success') {
-                            console.log(`✅ Ticket #${ticket} desativado com sucesso!`);
+                            console.log('✅ Desativado via extensão!');
                             resolve(true);
                         } else {
-                            console.error(`❌ Falha ao desativar ticket #${ticket}:`, event.data.error);
-                            reject(new Error(event.data.error || 'Erro desconhecido'));
+                            reject(new Error('Erro na extensão: ' + (event.data.error || 'Desconhecido')));
                         }
                     }
                 };
                 
                 window.addEventListener('message', responseHandler);
                 
-                // Envia comando para a extensão
+                // Envia comando
                 window.postMessage({
                     action: 'desativar',
                     ticket: ticket
                 }, '*');
                 
-                // Timeout
-                const timeoutDuration = isMobile ? 10000 : 5000;
+                // Timeout rápido para detectar se extensão existe
                 setTimeout(() => {
-                    window.removeEventListener('message', responseHandler);
-                    reject(new Error('Timeout: Extensão não respondeu'));
-                }, timeoutDuration);
+                    if (!responseReceived) {
+                        window.removeEventListener('message', responseHandler);
+                        reject(new Error('Extensão não disponível'));
+                    }
+                }, 2000);
             });
+        };
+
+        // Desativa via ntfy.sh (Mobile/Fallback)
+        const desativarViaNtfy = async (ticket) => {
+            console.log('📱 Desativando via ntfy.sh...');
+            
+            const maxTentativas = 3;
+            const timeout = 5000;
+
+            for (let tentativa = 1; tentativa <= maxTentativas; tentativa++) {
+                try {
+                    console.log(`Tentativa ${tentativa}/${maxTentativas}...`);
+                    
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+                    const topico = getNtfyTopic(ticket);
+                    const url = getNtfyUrl(ticket);
+                    
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        body: ticket,
+                        signal: controller.signal,
+                        headers: {
+                            'Content-Type': 'text/plain'
+                        }
+                    });
+
+                    clearTimeout(timeoutId);
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    console.log('✅ Enviado para ntfy.sh!');
+                    return true;
+
+                } catch (error) {
+                    console.warn(`⚠️ Tentativa ${tentativa} falhou:`, error.message);
+                    
+                    if (tentativa === maxTentativas) {
+                        throw new Error(`Falha após ${tentativa} tentativas: ${error.message}`);
+                    }
+
+                    await new Promise(resolve => setTimeout(resolve, 1000 * tentativa));
+                }
+            }
+        };
+
+        // Função principal para desativar chamado
+        const desativarChamado = async (ticket) => {
+            // Primeiro tenta via extensão (funciona no desktop)
+            try {
+                await tentarDesativarViaExtensao(ticket);
+                return 'extensao';
+            } catch (error) {
+                console.log('⚠️ Extensão não disponível:', error.message);
+                
+                // Fallback para ntfy.sh (funciona no mobile)
+                try {
+                    await desativarViaNtfy(ticket);
+                    return 'ntfy';
+                } catch (ntfyError) {
+                    throw new Error(`Falha em ambos os métodos. Extensão: ${error.message}. ntfy.sh: ${ntfyError.message}`);
+                }
+            }
         };
 
         // Função principal
@@ -167,15 +254,16 @@
                 console.log(`Iniciando desativação do ticket #${ticket}`);
                 showStatus(`Desativando chamado #${ticket}...`);
 
-                await desativarChamado(ticket);
+                const metodo = await desativarChamado(ticket);
                 
                 // Sucesso!
+                const metodTexto = metodo === 'extensao' ? 'via extensão (PC)' : 'via ntfy.sh (mobile)';
                 showStatus(
-                    `Chamado #${ticket} foi desativado com sucesso!`, 
+                    `Chamado #${ticket} foi desativado com sucesso ${metodTexto}!`, 
                     'success'
                 );
                 
-                // Fecha automaticamente após 1.5 segundos
+                // Fecha automaticamente
                 setTimeout(() => {
                     window.close();
                 }, 1500);

@@ -59,31 +59,48 @@ const showStatus = (message, type='loading', showRetry=false)=>{
         <p style="color:#666;font-size:12px;margin-top:20px;">Você pode fechar esta aba.</p>`;
 };
 
-// --------- Extensão Desktop ---------
+// --------- Extensão Desktop (VERSÃO SIMPLIFICADA SEM ID) ---------
 const tentarDesativarViaExtensao = (ticket) => {
-    return new Promise((resolve,reject)=>{
+    return new Promise((resolve, reject) => {
         console.log('🖥️ Tentando desativar via extensão...');
-        let responseReceived=false;
-        const responseHandler = (event)=>{
-            if(event.data && event.data.action==='desativarResponse' && event.data.ticket===ticket){
-                responseReceived=true;
+        
+        let responseReceived = false;
+        
+        // Listener para resposta da extensão
+        const responseHandler = (event) => {
+            if (event.data && 
+                event.data.action === 'desativarResponse' && 
+                event.data.ticket === ticket) {
+                
+                responseReceived = true;
                 window.removeEventListener('message', responseHandler);
-                if(event.data.status==='success'){
+                
+                if (event.data.status === 'success') {
                     console.log('✅ Desativado via extensão!');
                     resolve(true);
                 } else {
-                    reject(new Error('Erro na extensão: '+(event.data.error||'Desconhecido')));
+                    reject(new Error('Erro na extensão: ' + (event.data.error || event.data.message || 'Desconhecido')));
                 }
             }
         };
+        
+        // Adiciona listener
         window.addEventListener('message', responseHandler);
-        window.postMessage({action:'desativar', ticket:ticket},'*');
-        setTimeout(()=>{
-            if(!responseReceived){
+        
+        // Envia mensagem para a extensão
+        console.log('📤 Enviando mensagem para extensão via postMessage...');
+        window.postMessage({
+            action: 'desativar',
+            ticket: ticket
+        }, '*');
+        
+        // Timeout de 3 segundos
+        setTimeout(() => {
+            if (!responseReceived) {
                 window.removeEventListener('message', responseHandler);
-                reject(new Error('Extensão não disponível'));
+                reject(new Error('Extensão não respondeu (timeout)'));
             }
-        },2000);
+        }, 3000);
     });
 };
 

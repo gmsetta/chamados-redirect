@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Desativação de Chamado (Fila Global)</title>
+<title>Desativação de Chamado</title>
 <style>
 body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f0f0f0; }
 .container { max-width: 500px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
@@ -27,16 +27,21 @@ const NTFY_TOPICS = [
     'atualizador-maximo-gmsetta-tickets-v5-02',
     'atualizador-maximo-gmsetta-tickets-v5-03'
 ];
+
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-const getNtfyTopic = (ticket) => {
+
+function getNtfyTopic(ticket) {
     const ticketNum = parseInt(ticket)||0;
-    const index = ticketNum % NTFY_TOPICS.length;
-    return NTFY_TOPICS[index];
-};
-const getNtfyUrl = (ticket) => `https://ntfy.sh/${getNtfyTopic(ticket)}`;
-const showStatus = (message, type='loading', showRetry=false)=>{
-    const container=document.querySelector('.container');
-    if(!container) return;
+    return NTFY_TOPICS[ticketNum % NTFY_TOPICS.length];
+}
+
+function getNtfyUrl(ticket) {
+    return `https://ntfy.sh/${getNtfyTopic(ticket)}`;
+}
+
+function showStatus(message, type='loading', showRetry=false) {
+    const container = document.querySelector('.container');
+    if (!container) return;
     const deviceText = isMobile?'📱 Dispositivo móvel detectado':'🖥️ Dispositivo desktop detectado';
     const retryButton = showRetry?`<button class="btn" onclick="window.location.reload()">🔄 Tentar Novamente</button>`:'';
     let icon='🔄', title='Processando...', bgColor='#f0f0f0';
@@ -48,8 +53,9 @@ const showStatus = (message, type='loading', showRetry=false)=>{
         <div class="device-info">${deviceText}</div>
         ${retryButton}
         <p style="color:#666;font-size:12px;margin-top:20px;">Você pode fechar esta aba.</p>`;
-};
-// Fila global de tickets
+}
+
+// --- Fila global de tickets ---
 const ticketQueue = [];
 let queueWorkerActive = false;
 function enqueueTicket(ticket, resolve, reject) {
@@ -60,102 +66,75 @@ function processQueue() {
     if (queueWorkerActive || ticketQueue.length === 0) return;
     queueWorkerActive = true;
     const processNext = async () => {
-        if (ticketQueue.length === 0) {
-            queueWorkerActive = false;
-            return;
-        }
+        if (ticketQueue.length === 0) { queueWorkerActive = false; return; }
         const {ticket, resolve, reject} = ticketQueue.shift();
-        try {
-            await desativarViaNtfy(ticket);
-            resolve(true);
-        } catch (err) {
-            reject(err);
-        }
-        setTimeout(processNext, 5000); // 5 segundos entre cada requisição
+        try { await desativarViaNtfy(ticket); resolve(true); }
+        catch(err) { reject(err); }
+        setTimeout(processNext, 5000);
     };
     processNext();
 }
-const tentarDesativarViaExtensao = (ticket) => {
+
+// --- Tenta via extensão ---
+function tentarDesativarViaExtensao(ticket) {
     return new Promise((resolve, reject) => {
-        let responseReceived = false;
-        const responseHandler = (event) => {
-            if (event.data && event.data.action === 'desativarResponse' && event.data.ticket === ticket) {
-                responseReceived = true;
-                window.removeEventListener('message', responseHandler);
-                if (event.data.status === 'success') {
-                    resolve(true);
-                } else {
-                    reject(new Error('Erro na extensão: ' + (event.data.error || event.data.message || 'Desconhecido')));
-                }
+        let responded = false;
+        const handler = (event) => {
+            if (event.data?.action==='desativarResponse' && event.data.ticket===ticket) {
+                responded = true;
+                window.removeEventListener('message', handler);
+                event.data.status==='success'?resolve(true):reject(new Error(event.data.error||'Erro desconhecido'));
             }
         };
-        window.addEventListener('message', responseHandler);
-        window.postMessage({action: 'desativar',ticket: ticket}, '*');
-        setTimeout(() => {
-            if (!responseReceived) {
-                window.removeEventListener('message', responseHandler);
-                reject(new Error('Extensão não respondeu (timeout)'));
-            }
-        }, 3000);
+        window.addEventListener('message', handler);
+        window.postMessage({action:'desativar',ticket},'*');
+        setTimeout(()=>{ if(!responded){ window.removeEventListener('message', handler); reject(new Error('Extensão não respondeu (timeout)')); } }, 3000);
     });
-};
-const desativarViaNtfy = async(ticket)=>{
-    const maxTentativas=3;
-    const timeout=isMobile?5000:3000;
-    for(let t=1;t<=maxTentativas;t++){
+}
+
+// --- Desativa via ntfy.sh ---
+async function desativarViaNtfy(ticket) {
+    const maxTent=3, timeout=isMobile?5000:3000;
+    for(let t=1;t<=maxTent;t++){
         try{
             const controller=new AbortController();
             const timeoutId=setTimeout(()=>controller.abort(), timeout);
             const url=getNtfyUrl(ticket);
-            const response = await fetch(url,{
-                method:'POST',
-                body:ticket,
-                signal:controller.signal,
-                headers:{
-                    'Content-Type':'text/plain; charset=utf-8',
-                    'User-Agent':isMobile?'Mobile-Desativador':'Desktop-Desativador'
-                }
-            });
+            const response = await fetch(url,{method:'POST',body:ticket,signal:controller.signal,headers:{'Content-Type':'text/plain; charset=utf-8','User-Agent':isMobile?'Mobile-Desativador':'Desktop-Desativador'}});
             clearTimeout(timeoutId);
             if(!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             return true;
-        }catch(err){
-            if(t===maxTentativas) throw new Error(`Falha após ${t} tentativas: ${err.message}`);
-            await new Promise(r=>setTimeout(r,1000*t));
-        }
+        }catch(err){ if(t===maxTent) throw new Error(`Falha após ${t} tentativas: ${err.message}`); await new Promise(r=>setTimeout(r,1000*t)); }
     }
-};
-const desativarChamado = async(ticket)=>{
+}
+
+// --- Chamado ---
+async function desativarChamado(ticket){
+    try{ await tentarDesativarViaExtensao(ticket); return 'extensao'; }
+    catch(extError){ return new Promise((resolve,reject)=>{
+        enqueueTicket(ticket, ()=>resolve('ntfy'), err=>reject(new Error(`Falha em ambos métodos. Extensão: ${extError.message}. ntfy.sh: ${err.message}`)));
+    }); }
+}
+
+// --- Main ---
+async function main(){
+    await new Promise(r=>setTimeout(r,100));
+    const deviceInfo=document.getElementById('deviceInfo');
+    if(deviceInfo) deviceInfo.textContent=isMobile?'📱 Dispositivo móvel detectado':'🖥️ Dispositivo desktop detectado';
+    const ticket=new URLSearchParams(window.location.search).get('ticket');
+    if(!ticket){ showStatus('Número do chamado não encontrado na URL.','error',true); return; }
+    showStatus(`Desativando chamado #${ticket}...`);
     try{
-        await tentarDesativarViaExtensao(ticket);
-        return 'extensao';
-    }catch(extError){
-        return new Promise((resolve, reject) => {
-            enqueueTicket(ticket, 
-                (result) => resolve('ntfy'),
-                (err) => reject(new Error(`Falha em ambos os métodos. Extensão: ${extError.message}. ntfy.sh: ${err.message}`))
-            );
-        });
-    }
-};
-const main=async()=>{
-    try{
-        await new Promise(r=>setTimeout(r,100));
-        const deviceInfo=document.getElementById('deviceInfo');
-        if(deviceInfo) deviceInfo.textContent=isMobile?'📱 Dispositivo móvel detectado':'🖥️ Dispositivo desktop detectado';
-        const urlParams=new URLSearchParams(window.location.search);
-        const ticket=urlParams.get('ticket');
-        if(!ticket){showStatus('Número do chamado não encontrado na URL.','error',true); return;}
-        showStatus(`Desativando chamado #${ticket}...`);
-        const metodo = await desativarChamado(ticket);
-        const metodoTexto = metodo==='extensao'?'via extensão (PC)':'via ntfy.sh (mobile)';
-        showStatus(`Chamado #${ticket} foi desativado com sucesso ${metodoTexto}!`,'success');
+        const metodo=await desativarChamado(ticket);
+        const metodoTexto=metodo==='extensao'?'via extensão (PC)':'via ntfy.sh (mobile)';
+        showStatus(`Chamado #${ticket} desativado com sucesso ${metodoTexto}!`,'success');
         setTimeout(()=>window.close(),1500);
     }catch(err){
         showStatus(`Erro ao desativar chamado: ${err.message}`,'error',true);
     }
-};
-document.addEventListener('DOMContentLoaded',main);
+}
+
+document.addEventListener('DOMContentLoaded', main);
 </script>
 </body>
 </html>
